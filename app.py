@@ -5,6 +5,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 
@@ -18,36 +20,48 @@ st.markdown("현장에서 상위 10위 평균과 우리 병원 순위(100위 컷
 kw = st.text_input("🔎 검색어 (예: 강남역 치과)")
 hp = st.text_input("🏥 우리 병원명 (예: 미유치과의원)")
 
-# 버튼을 누르면 실행
 if st.button("🚀 순위 & 평균 스캔 시작"):
     if not kw or not hp:
         st.warning("키워드와 병원명을 모두 입력해주세요!")
     else:
-        with st.spinner("네이버 지도 고속 스캔 중... (약 10~15초 소요)"):
+        with st.spinner("네이버 지도 정밀 스캔 중... (약 15초 소요)"):
             
-            # 서버용 숨김 브라우저 세팅
             options = Options()
             options.add_argument("--headless")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
+            # 💡 [보안 보강] 사람처럼 보이게 하는 필수 세팅
+            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+            options.add_argument("--window-size=1920,1080")
             
             try:
                 driver = webdriver.Chrome(service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()), options=options)
                 driver.get(f"https://map.naver.com/p/search/{kw}")
-                time.sleep(3.5)
-                driver.switch_to.frame("searchIframe")
+                
+                # 💡 [로직 보강] searchIframe이 나타날 때까지 최대 10초간 대기
+                wait = WebDriverWait(driver, 10)
+                try:
+                    wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
+                except:
+                    st.error("네이버 지도 검색 결과창을 로딩하지 못했습니다. 검색어를 더 구체적으로 입력해보세요!")
+                    driver.quit()
+                    st.stop()
                 
                 top10_v_reviews, top10_b_reviews = [], []
                 our_rank = "100위권 밖 (마케팅 시급!)"
                 global_rank, found_target = 0, False
                 target_parts = [p.replace(" ", "") for p in hp.split()]
                 
-                # 최대 3페이지(100위~150위) 고속 스캔
+                # 100위 컷 고속 스캔
                 for page in range(1, 4):
                     if found_target or global_rank >= 100: break
                     
-                    scroll_box = driver.find_element(By.CSS_SELECTOR, "#_pcmap_list_scroll_container")
+                    # 스크롤 박스 대기 및 확보
+                    try:
+                        scroll_box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#_pcmap_list_scroll_container")))
+                    except: break
+
                     for step in range(10): 
                         if found_target or global_rank >= 100: break
                         
@@ -76,13 +90,13 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                                     found_target = True
                                     break
                             except: pass
-                        driver.execute_script("arguments[0].scrollBy(0, 800);", scroll_box)
-                        time.sleep(0.3)
+                        driver.execute_script("arguments[0].scrollBy(0, 1000);", scroll_box)
+                        time.sleep(0.5)
                         
                     if not found_target and global_rank < 100:
                         try:
                             next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
-                            driver.execute_script("arguments[0].click();", next_btn); time.sleep(1.5)
+                            driver.execute_script("arguments[0].click();", next_btn); time.sleep(2.0)
                         except: break
 
                 # 결과 출력
@@ -93,11 +107,11 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                 st.markdown(f"### 🎯 우리 병원 순위: <span style='color:red;'>{our_rank}</span>", unsafe_allow_html=True)
                 st.markdown("---")
                 st.markdown("### 📊 상위 경쟁사(1~10위) 평균")
-                st.write(f"✔️ 평균 영수증 리뷰: **{avg_v}건**")
-                st.write(f"✔️ 평균 블로그 리뷰: **{avg_b}건**")
+                st.write(f"✔️ 평균 영수증 리뷰: **{avg_v:,}건**")
+                st.write(f"✔️ 평균 블로그 리뷰: **{avg_b:,}건**")
 
             except Exception as e:
-                st.error(f"에러가 발생했습니다: {e}")
+                st.error(f"데이터를 가져오는 중 오류가 발생했습니다. (잠시 후 다시 시도해주세요)")
             finally:
                 if 'driver' in locals():
                     driver.quit()
