@@ -13,7 +13,7 @@ from webdriver_manager.core.os_manager import ChromeType
 # 모바일 화면 디자인 세팅
 st.set_page_config(page_title="애드컴퍼니 제공 순위 및 리뷰체크v7.2", page_icon="🚀", layout="centered")
 
-st.title("🚀플레이스 순위 및 평균리뷰수 확인 v7_feat 애드컴퍼니")
+st.title("🚀플레이스 순위 및 평균리뷰수 확인 v7_Feat 애드컴퍼니")
 st.markdown("현장에서 상위 10위 리뷰 평균수 와 플레이스 순위(100위 컷)를 스캔합니다.")
 
 # 입력창
@@ -125,6 +125,7 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
             finally:
                 if 'driver' in locals():
                     driver.quit()
+
 
 
 
