@@ -17,7 +17,7 @@ st.title("🚀 애드컴퍼니 제공 플레이스 순위 및 리뷰체크v3.2")
 st.markdown("현장에서 상위 10위 리뷰 평균수 와 플레이스 순위(100위 컷)를 스캔합니다.")
 
 # 입력창
-kw = st.text_input("🔎 검색어 (예: 분당 피부과 )")
+kw = st.text_input("🔎 순위 검색어 (예: 분당 피부과 )")
 hp = st.text_input("🏥 우리 상호명 (예: 아비쥬의원 분당)")
 
 if st.button("🚀 순위 & 평균 스캔 시작"):
@@ -114,7 +114,7 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                 avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
 
                 st.success("스캔 완료!")
-                st.markdown(f"### 🎯 우리 병원 순위: <span style='color:red;'>{our_rank}</span>", unsafe_allow_html=True)
+                st.markdown(f"### 🎯 현재 순위: <span style='color:red;'>{our_rank}</span>", unsafe_allow_html=True)
                 st.markdown("---")
                 st.markdown("### 📊 상위 경쟁사(1~10위) 평균")
                 st.write(f"✔️ 평균 영수증 리뷰: **{avg_v:,}건**")
@@ -125,6 +125,7 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
             finally:
                 if 'driver' in locals():
                     driver.quit()
+
 
 
 
