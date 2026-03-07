@@ -18,7 +18,7 @@ st.markdown("현장에서 상위 10위 리뷰 평균수 와 플레이스 순위(
 
 # 입력창
 kw = st.text_input("🔎 검색어 (예: 분당 피부과 )")
-hp = st.text_input("🏥 우리 병원명 (예: 아비쥬의원 분당)")
+hp = st.text_input("🏥 우리 상호명 (예: 아비쥬의원 분당)")
 
 if st.button("🚀 순위 & 평균 스캔 시작"):
     if not kw or not hp:
@@ -125,5 +125,6 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
             finally:
                 if 'driver' in locals():
                     driver.quit()
+
 
 
