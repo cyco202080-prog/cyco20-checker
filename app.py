@@ -11,20 +11,20 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 
 # 모바일 화면 디자인 세팅
-st.set_page_config(page_title="애드컴퍼니 순위 및 리뷰체크v3.2", page_icon="🚀", layout="centered")
+st.set_page_config(page_title="애드컴퍼니 제공 플레이스 순위 및 리뷰체크v3.2", page_icon="🚀", layout="centered")
 
-st.title("📊 애드컴퍼니 10초 팩트체크")
-st.markdown("현장에서 상위 10위 평균과 우리 병원 순위(100위 컷)를 스캔합니다.")
+st.title("📊 애드컴퍼니 제공 플레이스 순위 및 리뷰체크v3.2")
+st.markdown("현장에서 상위 10위 리뷰 평균수 와 플레이스 순위(100위 컷)를 스캔합니다.")
 
 # 입력창
-kw = st.text_input("🔎 검색어 (예: 평택고덕치과)")
-hp = st.text_input("🏥 우리 병원명 (예: 고덕키즈앤탑치과의원)")
+kw = st.text_input("🔎 검색어 (예: 분당 피부과 )")
+hp = st.text_input("🏥 우리 병원명 (예: 아비쥬의원 분당)")
 
 if st.button("🚀 순위 & 평균 스캔 시작"):
     if not kw or not hp:
         st.warning("키워드와 병원명을 모두 입력해주세요!")
     else:
-        with st.spinner("네이버 지도 정밀 스캔 중..."):
+        with st.spinner("네이버 플레이스 스캔 중..."):
             
             options = Options()
             options.add_argument("--headless")
@@ -125,3 +125,4 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
             finally:
                 if 'driver' in locals():
                     driver.quit()
+
