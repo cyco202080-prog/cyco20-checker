@@ -1,4 +1,3 @@
-# app.py (최종 수정본 - 깃허브에 그대로 복사해서 붙여넣으세요)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import time
@@ -22,14 +21,16 @@ def get_naver_rank(kw, hp):
     options.add_argument("--disable-gpu")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
     
-    # 💡 Render에 설치된 크롬 경로를 강제로 지정합니다
+    # 💡 Render 무료 서버 환경에서 크롬과 드라이버 경로를 강제로 지정합니다
     options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     try:
         driver = webdriver.Chrome(service=service, options=options)
         driver.get(f"https://map.naver.com/p/search/{kw}")
-        wait = WebDriverWait(driver, 15)
+        wait = WebDriverWait(driver, 20) # 대기 시간을 20초로 늘려 안정성 확보
+        
+        # 검색 결과 프레임 대기
         wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
         
         top10_v_reviews, top10_b_reviews = [], []
@@ -39,7 +40,6 @@ def get_naver_rank(kw, hp):
         processed_names = set()
         target_parts = [p.replace(" ", "") for p in hp.split()]
         
-        # 스캔 로직
         for page in range(1, 5):
             if found_target or global_rank >= 100: break
             try:
@@ -57,6 +57,7 @@ def get_naver_rank(kw, hp):
                         name_el = item.find_element(By.CSS_SELECTOR, ".place_bluelink")
                         name_text = name_el.text.split('\n')[0].strip()
                         if name_text in processed_names: continue
+                        
                         processed_names.add(name_text)
                         global_rank += 1
                         
@@ -75,24 +76,26 @@ def get_naver_rank(kw, hp):
                             found_target = True
                             break
                     except: pass
-                driver.execute_script("arguments[0].scrollBy(0, 1200);", scroll_box)
+                driver.execute_script("arguments[0].scrollBy(0, 1500);", scroll_box)
                 time.sleep(0.8)
             
             if not found_target and global_rank < 100:
                 try:
                     next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
                     driver.execute_script("arguments[0].click();", next_btn)
-                    time.sleep(2.5)
+                    time.sleep(3.0)
                 except: break
 
         avg_v = int(sum(top10_v_reviews) / len(top10_v_reviews)) if top10_v_reviews else 0
         avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
         
         return {"status": "success", "our_rank": our_rank, "avg_receipt": avg_v, "avg_blog": avg_b}
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
-        if 'driver' in locals(): driver.quit()
+        if 'driver' in locals():
+            driver.quit()
 
 @app.route('/check_rank', methods=['GET'])
 def check_rank():
@@ -103,6 +106,5 @@ def check_rank():
     return jsonify(get_naver_rank(keyword, hospital))
 
 if __name__ == '__main__':
-    # 💡 Render 전용 포트 설정 (이게 없으면 500 에러 납니다)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
