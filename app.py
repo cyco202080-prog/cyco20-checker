@@ -1,3 +1,4 @@
+# [수정본] app.py - 주소 유연성 확보
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -13,10 +14,10 @@ from selenium.webdriver.support import expected_conditions as EC
 app = Flask(__name__)
 CORS(app)
 
-# ✅ [추가] 렌더 서버의 감시를 통과하기 위한 홈 페이지
+# 1. 홈페이지 (여기 접속해서 글자가 나오면 서버 성공!)
 @app.route('/')
 def home():
-    return "<h1>애드컴퍼니 순위체크 엔진이 정상 가동 중입니다!</h1><p>마케팅 시스템 연동 준비 완료.</p>"
+    return "<h1>애드컴퍼니 엔진 가동 중</h1><p>정상적으로 연결되었습니다.</p>"
 
 def get_naver_rank(kw, hp):
     options = Options()
@@ -26,16 +27,16 @@ def get_naver_rank(kw, hp):
     options.add_argument("--disable-gpu")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
     
-    # Docker 환경에서 설치된 크롬과 드라이버 경로 (가장 안정적)
     options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     try:
         driver = webdriver.Chrome(service=service, options=options)
+        # 💡 네이버 지도로 바로 접속
         driver.get(f"https://map.naver.com/p/search/{kw}")
         wait = WebDriverWait(driver, 15)
         
-        # 네이버 지도는 iframe 안에서 돌아가므로 전환이 필요합니다
+        # iframe 전환 대기
         wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
         
         top10_v_reviews, top10_b_reviews = [], []
@@ -45,7 +46,6 @@ def get_naver_rank(kw, hp):
         processed_names = set()
         target_parts = [p.replace(" ", "") for p in hp.split()]
         
-        # 100위까지 스캔
         for page in range(1, 5):
             if found_target or global_rank >= 100: break
             try:
@@ -67,7 +67,6 @@ def get_naver_rank(kw, hp):
                         processed_names.add(name_text)
                         global_rank += 1
                         
-                        # 리뷰수 추출
                         v_m = re.search(r'(?:방문자리뷰|영수증리뷰)([0-9,\+]+)', item_text.replace(" ", ""))
                         b_m = re.search(r'블로그리뷰([0-9,\+]+)', item_text.replace(" ", ""))
                         v_cnt = int(v_m.group(1).replace(",", "").replace("+", "")) if v_m else 0
@@ -102,7 +101,9 @@ def get_naver_rank(kw, hp):
     finally:
         if 'driver' in locals(): driver.quit()
 
-@app.route('/check_rank', methods=['GET'])
+# 2. 순위 체크 경로 (주소를 더 유연하게 받도록 수정)
+@app.route('/check_rank')
+@app.route('/check_rank/')
 def check_rank():
     keyword = request.args.get('kw')
     hospital = request.args.get('hp')
