@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import os
 import time
 import re
-import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -13,6 +13,11 @@ from selenium.webdriver.support import expected_conditions as EC
 app = Flask(__name__)
 CORS(app)
 
+# ✅ [추가] 렌더 서버의 감시를 통과하기 위한 홈 페이지
+@app.route('/')
+def home():
+    return "<h1>애드컴퍼니 순위체크 엔진이 정상 가동 중입니다!</h1><p>마케팅 시스템 연동 준비 완료.</p>"
+
 def get_naver_rank(kw, hp):
     options = Options()
     options.add_argument("--headless")
@@ -21,16 +26,16 @@ def get_naver_rank(kw, hp):
     options.add_argument("--disable-gpu")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
     
-    # 💡 Render 무료 서버 환경에서 크롬과 드라이버 경로를 강제로 지정합니다
+    # Docker 환경에서 설치된 크롬과 드라이버 경로 (가장 안정적)
     options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     try:
         driver = webdriver.Chrome(service=service, options=options)
         driver.get(f"https://map.naver.com/p/search/{kw}")
-        wait = WebDriverWait(driver, 20) # 대기 시간을 20초로 늘려 안정성 확보
+        wait = WebDriverWait(driver, 15)
         
-        # 검색 결과 프레임 대기
+        # 네이버 지도는 iframe 안에서 돌아가므로 전환이 필요합니다
         wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
         
         top10_v_reviews, top10_b_reviews = [], []
@@ -40,6 +45,7 @@ def get_naver_rank(kw, hp):
         processed_names = set()
         target_parts = [p.replace(" ", "") for p in hp.split()]
         
+        # 100위까지 스캔
         for page in range(1, 5):
             if found_target or global_rank >= 100: break
             try:
@@ -61,6 +67,7 @@ def get_naver_rank(kw, hp):
                         processed_names.add(name_text)
                         global_rank += 1
                         
+                        # 리뷰수 추출
                         v_m = re.search(r'(?:방문자리뷰|영수증리뷰)([0-9,\+]+)', item_text.replace(" ", ""))
                         b_m = re.search(r'블로그리뷰([0-9,\+]+)', item_text.replace(" ", ""))
                         v_cnt = int(v_m.group(1).replace(",", "").replace("+", "")) if v_m else 0
@@ -83,28 +90,26 @@ def get_naver_rank(kw, hp):
                 try:
                     next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
                     driver.execute_script("arguments[0].click();", next_btn)
-                    time.sleep(3.0)
+                    time.sleep(2.5)
                 except: break
 
         avg_v = int(sum(top10_v_reviews) / len(top10_v_reviews)) if top10_v_reviews else 0
         avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
         
         return {"status": "success", "our_rank": our_rank, "avg_receipt": avg_v, "avg_blog": avg_b}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
-        if 'driver' in locals():
-            driver.quit()
+        if 'driver' in locals(): driver.quit()
 
 @app.route('/check_rank', methods=['GET'])
 def check_rank():
     keyword = request.args.get('kw')
     hospital = request.args.get('hp')
     if not keyword or not hospital:
-        return jsonify({"status": "error", "message": "Missing parameters"}), 400
+        return jsonify({"status": "error", "message": "파라미터 부족"}), 400
     return jsonify(get_naver_rank(keyword, hospital))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
