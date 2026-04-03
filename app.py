@@ -1,7 +1,4 @@
-# [수정본] app.py - 주소 유연성 확보
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import os
+import streamlit as st
 import time
 import re
 from selenium import webdriver
@@ -10,107 +7,112 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 
-app = Flask(__name__)
-CORS(app)
+# 모바일 화면 디자인 세팅
+st.set_page_config(page_title="애드컴퍼니 팩트체커", page_icon="🚀", layout="centered")
 
-# 1. 홈페이지 (여기 접속해서 글자가 나오면 서버 성공!)
-@app.route('/')
-def home():
-    return "<h1>애드컴퍼니 엔진 가동 중</h1><p>정상적으로 연결되었습니다.</p>"
+st.title("📊 애드컴퍼니 10초 팩트체크")
+st.markdown("현장에서 상위 10위 평균과 우리 병원 순위(100위 컷)를 스캔합니다.")
 
-def get_naver_rank(kw, hp):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
-    
-    options.binary_location = "/usr/bin/chromium"
-    service = Service("/usr/bin/chromedriver")
-    
-    try:
-        driver = webdriver.Chrome(service=service, options=options)
-        # 💡 네이버 지도로 바로 접속
-        driver.get(f"https://map.naver.com/p/search/{kw}")
-        wait = WebDriverWait(driver, 15)
-        
-        # iframe 전환 대기
-        wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
-        
-        top10_v_reviews, top10_b_reviews = [], []
-        our_rank = 0
-        global_rank = 0
-        found_target = False
-        processed_names = set()
-        target_parts = [p.replace(" ", "") for p in hp.split()]
-        
-        for page in range(1, 5):
-            if found_target or global_rank >= 100: break
-            try:
-                scroll_box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#_pcmap_list_scroll_container")))
-            except: break
+# 입력창
+kw = st.text_input("🔎 검색어 (예: 평택고덕치과)")
+hp = st.text_input("🏥 우리 병원명 (예: 고덕키즈앤탑치과의원)")
 
-            for step in range(12):
-                if found_target or global_rank >= 100: break
-                curr_items = driver.find_elements(By.CSS_SELECTOR, "li")
-                for item in curr_items:
-                    if found_target or global_rank >= 100: break
-                    try:
-                        item_text = item.text
-                        if not item_text or "광고" in item_text: continue
-                        name_el = item.find_element(By.CSS_SELECTOR, ".place_bluelink")
-                        name_text = name_el.text.split('\n')[0].strip()
-                        if name_text in processed_names: continue
-                        
-                        processed_names.add(name_text)
-                        global_rank += 1
-                        
-                        v_m = re.search(r'(?:방문자리뷰|영수증리뷰)([0-9,\+]+)', item_text.replace(" ", ""))
-                        b_m = re.search(r'블로그리뷰([0-9,\+]+)', item_text.replace(" ", ""))
-                        v_cnt = int(v_m.group(1).replace(",", "").replace("+", "")) if v_m else 0
-                        b_cnt = int(b_m.group(1).replace(",", "").replace("+", "")) if b_m else 0
-                        
-                        if global_rank <= 10:
-                            top10_v_reviews.append(v_cnt)
-                            top10_b_reviews.append(b_cnt)
-                            
-                        clean_name = name_text.replace(" ", "")
-                        if all(part in clean_name for part in target_parts):
-                            our_rank = global_rank
-                            found_target = True
-                            break
-                    except: pass
-                driver.execute_script("arguments[0].scrollBy(0, 1500);", scroll_box)
-                time.sleep(0.8)
+if st.button("🚀 순위 & 평균 스캔 시작"):
+    if not kw or not hp:
+        st.warning("키워드와 병원명을 모두 입력해주세요!")
+    else:
+        with st.spinner("네이버 지도 정밀 스캔 중..."):
             
-            if not found_target and global_rank < 100:
-                try:
-                    next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
-                    driver.execute_script("arguments[0].click();", next_btn)
-                    time.sleep(2.5)
-                except: break
+            options = Options()
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+            options.add_argument("--window-size=1920,1080")
+            
+            try:
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()), options=options)
+                driver.get(f"https://map.naver.com/p/search/{kw}")
+                
+                wait = WebDriverWait(driver, 10)
+                wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
+                
+                top10_v_reviews, top10_b_reviews = [], []
+                our_rank = "100위권 밖 (마케팅 시급!)"
+                global_rank = 0
+                found_target = False
+                processed_names = set() # 💡 중복 제거용 필터
+                
+                target_parts = [p.replace(" ", "") for p in hp.split()]
+                
+                # 100위 컷 고속 스캔
+                for page in range(1, 5): 
+                    if found_target or global_rank >= 100: break
+                    
+                    try:
+                        scroll_box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#_pcmap_list_scroll_container")))
+                    except: break
 
-        avg_v = int(sum(top10_v_reviews) / len(top10_v_reviews)) if top10_v_reviews else 0
-        avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
-        
-        return {"status": "success", "our_rank": our_rank, "avg_receipt": avg_v, "avg_blog": avg_b}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
-        if 'driver' in locals(): driver.quit()
+                    for step in range(12): 
+                        if found_target or global_rank >= 100: break
+                        
+                        curr_items = driver.find_elements(By.CSS_SELECTOR, "li")
+                        for item in curr_items:
+                            if found_target or global_rank >= 100: break
+                            try:
+                                item_text = item.text
+                                if not item_text or "광고" in item_text: continue
+                                
+                                name_el = item.find_element(By.CSS_SELECTOR, ".place_bluelink")
+                                name_text = name_el.text.split('\n')[0].strip()
+                                clean_name = name_text.replace(" ", "")
+                                
+                                if name_text in processed_names: continue
+                                
+                                processed_names.add(name_text)
+                                global_rank += 1
+                                
+                                v_m = re.search(r'(?:방문자리뷰|영수증리뷰)([0-9,\+]+)', item_text.replace(" ", ""))
+                                b_m = re.search(r'블로그리뷰([0-9,\+]+)', item_text.replace(" ", ""))
+                                v_cnt = int(v_m.group(1).replace(",", "").replace("+", "")) if v_m else 0
+                                b_cnt = int(b_m.group(1).replace(",", "").replace("+", "")) if b_m else 0
+                                
+                                if global_rank <= 10:
+                                    top10_v_reviews.append(v_cnt)
+                                    top10_b_reviews.append(b_cnt)
+                                    
+                                if all(part in clean_name for part in target_parts):
+                                    our_rank = f"{global_rank}위"
+                                    found_target = True
+                                    break
+                            except: pass
+                        
+                        driver.execute_script("arguments[0].scrollBy(0, 1200);", scroll_box)
+                        time.sleep(0.6)
+                        
+                    if not found_target and global_rank < 100:
+                        try:
+                            next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
+                            driver.execute_script("arguments[0].click();", next_btn)
+                            time.sleep(2.0)
+                        except: break
 
-# 2. 순위 체크 경로 (주소를 더 유연하게 받도록 수정)
-@app.route('/check_rank')
-@app.route('/check_rank/')
-def check_rank():
-    keyword = request.args.get('kw')
-    hospital = request.args.get('hp')
-    if not keyword or not hospital:
-        return jsonify({"status": "error", "message": "파라미터 부족"}), 400
-    return jsonify(get_naver_rank(keyword, hospital))
+                avg_v = int(sum(top10_v_reviews) / len(top10_v_reviews)) if top10_v_reviews else 0
+                avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+                st.success("스캔 완료!")
+                st.markdown(f"### 🎯 우리 병원 순위: <span style='color:red;'>{our_rank}</span>", unsafe_allow_html=True)
+                st.markdown("---")
+                st.markdown("### 📊 상위 경쟁사(1~10위) 평균")
+                st.write(f"✔️ 평균 영수증 리뷰: **{avg_v:,}건**")
+                st.write(f"✔️ 평균 블로그 리뷰: **{avg_b:,}건**")
+
+            except Exception as e:
+                st.error(f"데이터를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+            finally:
+                if 'driver' in locals():
+                    driver.quit()
