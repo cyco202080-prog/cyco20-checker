@@ -24,28 +24,46 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
     if not kw or not hp:
         st.warning("키워드와 병원명을 모두 입력해주세요!")
     else:
-        # 💡 안내 문구 수정 (해외 서버 로딩 시간 안내)
-        with st.spinner("네이버 지도 정밀 스캔 중... (서버 상태에 따라 최대 20초 소요)"):
+        with st.spinner("네이버 보안 우회 및 정밀 스캔 중... (최대 20초)"):
             
             options = Options()
-            options.add_argument("--headless")
+            options.add_argument("--headless=new") # 최신 헤드리스 모드 (탐지 회피율 높음)
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
-            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+            
+            # 💡 [핵심 보안 우회] 봇 탐지를 무력화하는 최강 옵션
+            options.add_argument("--disable-blink-features=AutomationControlled") 
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option("useAutomationExtension", False)
+            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             options.add_argument("--window-size=1920,1080")
-            options.add_argument("--lang=ko_KR") # 한국어 세팅 강제
+            options.add_argument("--lang=ko_KR")
             
             try:
                 driver = webdriver.Chrome(service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()), options=options)
+                
+                # 봇 탐지 속성을 자바스크립트로 한 번 더 지워줌
+                driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                    'source': '''
+                        Object.defineProperty(navigator, 'webdriver', {
+                          get: () => undefined
+                        })
+                    '''
+                })
+                
                 driver.get(f"https://map.naver.com/p/search/{kw}")
                 
-                # 💡 대기 시간 15초로 넉넉하게 연장
+                # 프레임 전환 대기
                 wait = WebDriverWait(driver, 15)
                 wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
                 
-                # 💡 핵심: 프레임에 들어간 후 리스트가 다 그려질 때까지 무조건 3초 강제 대기
-                time.sleep(3) 
+                # 💡 리스트의 첫 번째 항목(li)이 화면에 확실히 뜰 때까지 대기 (가장 확실한 확인법)
+                try:
+                    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "li")))
+                except:
+                    st.error("네이버에서 로봇 접근으로 차단했거나 검색 결과가 없습니다. (1분 뒤 다시 시도해주세요)")
+                    st.stop()
                 
                 top10_v_reviews, top10_b_reviews = [], []
                 our_rank = "100위권 밖 (마케팅 시급!)"
@@ -59,11 +77,8 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                     if found_target or global_rank >= 100: break
                     
                     try:
-                        # 💡 리스트를 못 찾으면 조용히 0건 처리하지 않고 에러를 발생시킴
                         scroll_box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#_pcmap_list_scroll_container")))
-                    except Exception as e: 
-                        if page == 1:
-                            st.error("네이버 지도가 늦게 열려 리스트를 찾지 못했습니다. 다시 한 번 '스캔 시작'을 눌러주세요!")
+                    except: 
                         break
 
                     for step in range(12): 
@@ -100,7 +115,6 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                                     break
                             except: pass
                         
-                        # 💡 스크롤 내리는 시간도 조금 더 넉넉하게 확보 (0.8초)
                         driver.execute_script("arguments[0].scrollBy(0, 1200);", scroll_box)
                         time.sleep(0.8) 
                         
@@ -108,11 +122,9 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                         try:
                             next_btn = driver.find_element(By.XPATH, f"//a[text()='{page + 1}']")
                             driver.execute_script("arguments[0].click();", next_btn)
-                            # 💡 다음 페이지 넘어갈 때도 충분히 대기
                             time.sleep(2.5) 
                         except: break
 
-                # 💡 안전장치: 스캔을 아예 못했을 경우 방어
                 if global_rank == 0:
                     st.warning("스캔에 실패했습니다. (원인: 네이버 로딩 지연 또는 검색 결과 없음)")
                 else:
