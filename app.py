@@ -10,13 +10,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 
-# 모바일 화면 디자인 세팅
 st.set_page_config(page_title="애드컴퍼니 팩트체커", page_icon="🚀", layout="centered")
 
 st.title("📊 애드컴퍼니 10초 팩트체크")
 st.markdown("현장에서 상위 10위 평균과 우리 병원 순위(100위 컷)를 스캔합니다.")
 
-# 입력창
 kw = st.text_input("🔎 검색어 (예: 평택고덕치과)")
 hp = st.text_input("🏥 우리 병원명 (예: 고덕키즈앤탑치과의원)")
 
@@ -27,12 +25,10 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
         with st.spinner("네이버 보안 우회 및 정밀 스캔 중... (최대 20초)"):
             
             options = Options()
-            options.add_argument("--headless=new") # 최신 헤드리스 모드 (탐지 회피율 높음)
+            options.add_argument("--headless=new") 
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
-            
-            # 💡 [핵심 보안 우회] 봇 탐지를 무력화하는 최강 옵션
             options.add_argument("--disable-blink-features=AutomationControlled") 
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option("useAutomationExtension", False)
@@ -43,7 +39,6 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
             try:
                 driver = webdriver.Chrome(service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()), options=options)
                 
-                # 봇 탐지 속성을 자바스크립트로 한 번 더 지워줌
                 driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
                     'source': '''
                         Object.defineProperty(navigator, 'webdriver', {
@@ -54,15 +49,16 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                 
                 driver.get(f"https://map.naver.com/p/search/{kw}")
                 
-                # 프레임 전환 대기
                 wait = WebDriverWait(driver, 15)
                 wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "searchIframe")))
                 
-                # 💡 리스트의 첫 번째 항목(li)이 화면에 확실히 뜰 때까지 대기 (가장 확실한 확인법)
                 try:
                     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "li")))
-                except:
-                    st.error("네이버에서 로봇 접근으로 차단했거나 검색 결과가 없습니다. (1분 뒤 다시 시도해주세요)")
+                except Exception as wait_e:
+                    st.error("네이버에서 로봇 접근으로 차단했거나 검색 결과가 없습니다.")
+                    # 💡 CCTV 기능: 에러 났을 때 화면 캡처해서 보여주기
+                    driver.save_screenshot("error_screenshot.png")
+                    st.image("error_screenshot.png", caption="📸 현재 봇이 갇혀있는 네이버 화면")
                     st.stop()
                 
                 top10_v_reviews, top10_b_reviews = [], []
@@ -126,7 +122,9 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                         except: break
 
                 if global_rank == 0:
-                    st.warning("스캔에 실패했습니다. (원인: 네이버 로딩 지연 또는 검색 결과 없음)")
+                    st.warning("스캔에 실패했습니다. (원인: 리스트를 찾지 못함)")
+                    driver.save_screenshot("error_screenshot2.png")
+                    st.image("error_screenshot2.png", caption="📸 현재 봇이 갇혀있는 네이버 화면")
                 else:
                     avg_v = int(sum(top10_v_reviews) / len(top10_v_reviews)) if top10_v_reviews else 0
                     avg_b = int(sum(top10_b_reviews) / len(top10_b_reviews)) if top10_b_reviews else 0
@@ -139,7 +137,11 @@ if st.button("🚀 순위 & 평균 스캔 시작"):
                     st.write(f"✔️ 평균 블로그 리뷰: **{avg_b:,}건**")
 
             except Exception as e:
-                st.error(f"데이터를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                st.error(f"데이터를 가져오는 중 오류가 발생했습니다: {e}")
+                try:
+                    driver.save_screenshot("fatal_error.png")
+                    st.image("fatal_error.png", caption="📸 에러 발생 순간의 화면")
+                except: pass
             finally:
                 if 'driver' in locals():
                     driver.quit()
